@@ -11,6 +11,11 @@ import StringIO
 import subprocess
 
 log = logging.getLogger(__name__)
+stream_handler = logging.StreamHandler(sys.stdout)
+stream_handler.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(levelname)s: %(message)s')
+stream_handler.setFormatter(formatter)
+log.addHandler(stream_handler)
 
 class KEParserException(Exception):
     pass
@@ -43,20 +48,23 @@ class KEParser(object):
 
     schema_shelf = '/tmp/schema.db'
     sample_length = 1000000
+    line_count = 0
+    item_count = 0
+    regex_remove_numbers = re.compile('\d+$')
 
-    def __init__(self, input_file, schema_file):
+    def __init__(self, input_file, input_file_path, schema_file):
+
+        self.file = input_file
+        module_name = os.path.basename(input_file_path).split(os.extsep, 1)[0]
 
         # Sie of file in bytes
-        file_byte_size = os.path.getsize(input_file)
-        filename, extension = os.path.basename(input_file).split(os.extsep, 1)
+        file_byte_size = os.path.getsize(input_file_path)
 
-        # Open the file
-        extension = os.path.splitext(input_file)[1]
-        if '.gz' in extension:
-            self.file = gzip.open(input_file)
+        #  If this is a zipped file, read a partial of the file
+        if '.gz' in input_file_path:
 
             # Read file to be able to estimate number of lines
-            tmp_file = open(input_file, 'rb')
+            tmp_file = open(input_file_path, 'rb')
             # Read the first sample_length number of bytes into the file buffer
             # This is uncompressed - allowing us to an estimate based on the uncompressed file size
             file_buffer = StringIO.StringIO(tmp_file.read(self.sample_length))
@@ -66,24 +74,18 @@ class KEParser(object):
                 file_sample = f.readlines()
 
         else:
-            self.file = open(input_file)
+
             # .splitlines(x) isn't working - much more accurate to read() and then splitlines()
             file_sample = self.file.read(self.sample_length).splitlines()
 
             # Reposition file cursor at start of file
-            self.file.seek(0, 0);
+            self.file.seek(0, 0)
 
         self.estimate_max_lines = file_byte_size * len(file_sample) / self.sample_length
 
         # Load the schema
-        self.schema = self.get_schema(schema_file, filename)
+        self.schema = self.get_schema(schema_file, module_name)
 
-        # Regex: replace numbers at end of a string
-        self.regex_remove_numbers = re.compile('\d+$')
-
-        # Initiate counters
-        self.line_count = 0
-        self.item_count = 0
 
     def __iter__(self):
         return self
@@ -236,11 +238,22 @@ class KEParser(object):
 
         # If the yaml schema file doesn't exist, build using the PERL script
         if not os.path.isfile(yaml_schema_file):
-            pipe = subprocess.Popen(["perl", "/var/www/data.nhm/KEParser/bin/schema-yaml.pl", schema_file], stdout=subprocess.PIPE)
 
-            if pipe.stdout.read() != 0:
-                raise KEParserException('Perl subprocess converting schema.pl to YAML failed')
+            #  Ensure directory is writable
+            try:
 
+                f = os.path.join(schema_directory, 'dummy.txt')
+                open(f, 'w')
+                os.remove(f)
+
+            except IOError:
+                raise IOError('Schema directory is not writable')
+            else:
+
+                pipe = subprocess.Popen(["perl", os.path.join(os.path.dirname(os.path.dirname(__file__)), "bin/schema-yaml.pl"), schema_file], stdout=subprocess.PIPE)
+
+                if not pipe.stdout.read():
+                    raise KEParserException('Perl subprocess converting schema.pl to YAML failed')
 
         with codecs.open(yaml_schema_file, "r", "ISO-8859-2") as f:
             docs = yaml.load_all(f)
