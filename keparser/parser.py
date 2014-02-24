@@ -223,7 +223,8 @@ class KEParser(object):
         except OSError:
             pass
 
-    def rebuild_schema(self, schema_file, shelf):
+    @staticmethod
+    def rebuild_schema(schema_file, shelf):
 
         """
         Open the schema shelf.
