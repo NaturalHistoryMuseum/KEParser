@@ -11,7 +11,7 @@ setup(
     packages=['keparser'],
     license='LICENSE.txt',
     description='Parse KEEMU key=value export files.',
-    long_description=open('README.txt').read(),
+    long_description=open('README.md').read(),
     install_requires=[
         "pyyaml == 3.10",
     ],
