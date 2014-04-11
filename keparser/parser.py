@@ -9,6 +9,7 @@ import gzip
 import contextlib
 import StringIO
 import subprocess
+import icu
 
 log = logging.getLogger(__name__)
 stream_handler = logging.StreamHandler(sys.stdout)
@@ -90,6 +91,20 @@ class KEParser(object):
     def __iter__(self):
         return self
 
+    @staticmethod
+    def encode_value(value, new_coding='UTF-8'):
+        """
+        Encode value from KE EMu.
+        There are actually a mixture of encodings used in KE EMu, so detect first
+        @param value: original value
+        @param new_coding: UTF-8
+        @return: encoded value
+        """
+        coding = icu.CharsetDetector(value).detect().getName()
+        if new_coding.upper() != coding.upper():
+            value = unicode(value, coding).encode(new_coding)
+        return value
+
     def next(self):
 
         item = {}
@@ -130,7 +145,7 @@ class KEParser(object):
                         item['irn'] = int(value)
                         continue
 
-                    value = value.decode('ISO-8859-2')
+                    value = self.encode_value(value)
 
                     # Is this an array of values fieldName:0?
                     if ':' in field:
