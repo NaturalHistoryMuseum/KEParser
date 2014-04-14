@@ -104,18 +104,24 @@ class KEParser(object):
         @param new_coding: UTF-8
         @return: encoded value
         """
+
+
         try:
-            coding = icu.CharsetDetector(value).detect().getName()
-            value = value.decode(coding).encode(new_coding)
-        except (LookupError, UnicodeDecodeError, AttributeError):
+            # Can the string be parsed as UTF-8?
+            value.decode(new_coding)
+        except UnicodeDecodeError:
+
+            #  Cannot be parsed, so try detecting charset and converting
             try:
-                # Can the string still be parsed at UTF-8
-                value.decode(new_coding)
-            except UnicodeDecodeError:
-                # Nope - so decode and strip out bad chars
-                value = value.decode(new_coding, 'ignore')
+                coding = icu.CharsetDetector(value).detect().getName()
+            except AttributeError:
+                # Cannot detect encoding - use ISO-8859-2 as default
+                coding = 'ISO-8859-2'
+
+            value = value.decode(coding, 'ignore').encode(new_coding)
 
         return value
+
 
     def next(self):
 
