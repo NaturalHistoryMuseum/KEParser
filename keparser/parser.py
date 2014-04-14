@@ -10,6 +10,10 @@ import contextlib
 import StringIO
 import subprocess
 import icu
+import chardet
+from bs4 import UnicodeDammit
+from bs4.dammit import EncodingDetector
+import unicodedata
 
 log = logging.getLogger(__name__)
 stream_handler = logging.StreamHandler(sys.stdout)
@@ -92,7 +96,7 @@ class KEParser(object):
         return self
 
     @staticmethod
-    def encode_value(value, new_coding='UTF-8'):
+    def encode_value(value, new_coding='utf-8'):
         """
         Encode value from KE EMu.
         There are actually a mixture of encodings used in KE EMu, so detect first
@@ -100,9 +104,17 @@ class KEParser(object):
         @param new_coding: UTF-8
         @return: encoded value
         """
-        coding = icu.CharsetDetector(value).detect().getName()
-        if new_coding.upper() != coding.upper():
-            value = unicode(value, coding).encode(new_coding)
+        try:
+            coding = icu.CharsetDetector(value).detect().getName()
+            value = value.decode(coding).encode(new_coding)
+        except (LookupError, UnicodeDecodeError, AttributeError):
+            try:
+                # Can the string still be parsed at UTF-8
+                value.decode(new_coding)
+            except UnicodeDecodeError:
+                # Nope - so decode and strip out bad chars
+                value = value.decode(new_coding, 'ignore')
+
         return value
 
     def next(self):
@@ -130,6 +142,7 @@ class KEParser(object):
                         item[i] = value[0]
 
                 self.item_count += 1
+
                 return item
 
             else:
@@ -221,7 +234,7 @@ class KEParser(object):
                         else:
                             log.error('Empty line on %s' % self.line_count)
                     else:
-                        print 'ValueError'
+                        print 'ValueError:', item['irn']
                         print e
                         print line
                         raise ValueError, e
