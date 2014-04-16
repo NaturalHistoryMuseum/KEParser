@@ -105,6 +105,8 @@ class KEParser(object):
         @return: encoded value
         """
 
+        # Use ISO-8859-2 as default
+        default_coding = 'ISO-8859-2'
 
         try:
             # Can the string be parsed as UTF-8?
@@ -116,9 +118,16 @@ class KEParser(object):
                 coding = icu.CharsetDetector(value).detect().getName()
             except AttributeError:
                 # Cannot detect encoding - use ISO-8859-2 as default
-                coding = 'ISO-8859-2'
+                coding = default_coding
 
-            value = value.decode(coding, 'ignore').encode(new_coding)
+            # Use the detected encoding to decode / encode string
+            try:
+                value = value.decode(coding, errors='ignore')
+            except LookupError:
+                # Codec does not exist
+                value = value.decode(default_coding, errors='ignore')
+            finally:
+                value = value.encode(new_coding)
 
         return value
 
@@ -144,6 +153,7 @@ class KEParser(object):
 
                 # Flatten the list
                 for i, value in item.iteritems():
+
                     if isinstance(value, list) and len(value) == 1:
                         item[i] = value[0]
 
