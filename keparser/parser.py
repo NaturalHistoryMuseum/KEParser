@@ -22,6 +22,11 @@ formatter = logging.Formatter('%(levelname)s: %(message)s')
 stream_handler.setFormatter(formatter)
 log.addHandler(stream_handler)
 
+# To what extent should arrays be flattened?
+FLATTEN_NONE = 0  # Do not flatten
+FLATTEN_SINGLE = 1  # Flatten arrays with only one element (default)
+FLATTEN_ALL = 2  # Flatten everything - arrays will be concatenated with "; "
+
 class KEParserException(Exception):
     pass
 
@@ -52,14 +57,17 @@ def patch_gzip_for_partial():
 class KEParser(object):
 
     schema_shelf = '/tmp/schema.db'
+    # Sample length to estimate batch size
     sample_length = 1000000
     line_count = 0
     item_count = 0
     regex_remove_numbers = re.compile('\d+$')
 
-    def __init__(self, input_file, input_file_path, schema_file):
+    def __init__(self, input_file, input_file_path, schema_file, flatten_mode=FLATTEN_SINGLE):
 
         self.file = input_file
+        # Set mode to flatten arrays
+        self.flatten_mode = flatten_mode
         module_name = os.path.basename(input_file_path).split(os.extsep, 1)[0]
 
         # Sie of file in bytes
@@ -151,11 +159,8 @@ class KEParser(object):
             # End of record separator = ###
             elif line == '###':
 
-                # Flatten the list
-                for i, value in item.iteritems():
-
-                    if isinstance(value, list) and len(value) == 1:
-                        item[i] = value[0]
+                if self.flatten_mode != FLATTEN_NONE:
+                    item = self.flatten(item)
 
                 self.item_count += 1
 
@@ -204,32 +209,27 @@ class KEParser(object):
                     try:
                         field_type = self.schema['columns'][field]['DataType']
                     except KeyError:
-                        # TODO: DO I need to do more to handle schema changes?
+                        # TODO: Do I need to do more to handle schema changes?
                         raise KEParserException('Field %s not found in schema' % (field, ))
                     else:
-                        # Implicitly cast integer fields
-                        if field_type == 'Integer':
-                            try:
-                                value = int(value)
-                            except ValueError, e:
-
-                                # A lot of the legacy data seems to be a range, with both values the same
-                                # 1966 - 1966
-                                split_value = value.split(' - ')
-                                if len(split_value) == 2 and split_value[0] == split_value[1]:
-                                    value = int(split_value[0])
-                                else:
-                                    # Otherwise, set value to None
-                                    value = None
-
-                    # Convert Yes / No to True / False so they can be stored as boolean
-                    if value in ['yes', 'Yes']:
-                        value = True
-                    elif value in ['no', 'No']:
-                        value = False
-                    # Convert 0 to none
-                    elif value == '0':
-                        value = None
+                        # Convert empty strings to None
+                        # Cast integer and float fields
+                        # There are also Latitude & Longitude fields, but these are in the format 03 54 04.16 N and treated as strings
+                        if len(value) == 0:
+                            value = None
+                        elif field_type == 'Integer':
+                            value = self.to_int(value, item['irn'], line)
+                        elif field_type == 'Float':
+                            value = self.to_float(value, item['irn'], line)
+                        else:
+                            # Convert Yes / No to True / False so they can be stored as boolean
+                            if value in ['yes', 'Yes']:
+                                value = True
+                            elif value in ['no', 'No']:
+                                value = False
+                            # Convert 0 to none (this is for non- Integer and Float fields)
+                            elif value == '0':
+                                value = None
 
                     if i is None:
                         item[field] = value
@@ -238,6 +238,7 @@ class KEParser(object):
                             item[field] = FieldList()
 
                         item[field][i] = value
+
 
                 except ValueError, e:
                     # Does this line have an = sign? KE EMu export contains
@@ -257,6 +258,48 @@ class KEParser(object):
 
         self.file.close()
         raise StopIteration
+
+    def flatten(self, item):
+        # Flatten list values
+        for i, value in item.iteritems():
+
+            # Is the value a list?
+            if isinstance(value, list):
+
+                if len(value) == 1:
+                    # Only one item in array - assign value to key
+                    item[i] = value[0]
+                elif self.flatten_mode == FLATTEN_ALL:
+                    # Concatenate all values into a string separated by ";
+                    item[i] = '; '.join([str(v) for v in value])
+
+        return item
+
+    def to_int(self, *args):
+        return self.to_type(*args, func=int)
+
+    def to_float(self, *args):
+        return self.to_type(*args, func=float)
+
+    def to_type(self, value, irn, line, func):
+
+        try:
+            value = func(value)
+        except ValueError:
+
+            # A lot of the legacy data seems to be a range, with both values the same
+            # 1966 - 1966
+            split_value = [v.strip() for v in value.split('-')]
+
+            if len(split_value) == 2 and split_value[0] == split_value[1]:
+                # Try converting again the first split value
+                value = self.to_type(split_value[0], irn, line, func)
+            else:
+                # Otherwise, set value to None
+                value = None
+                log.error('Data type conversion error %s: Could not convert %s to %s' % (irn, line, func.__name__))
+
+        return value
 
     def delete_schema(self):
         """
