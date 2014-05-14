@@ -14,6 +14,7 @@ import chardet
 from bs4 import UnicodeDammit
 from bs4.dammit import EncodingDetector
 import unicodedata
+import codecs
 
 log = logging.getLogger(__name__)
 stream_handler = logging.StreamHandler(sys.stdout)
@@ -53,6 +54,8 @@ def patch_gzip_for_partial():
     gzip.GzipFile._read_eof = lambda *args, **kwargs: None
     yield
     gzip.GzipFile._read_eof = _read_eof
+
+
 
 class KEParser(object):
 
@@ -104,41 +107,143 @@ class KEParser(object):
         return self
 
     @staticmethod
-    def encode_value(value, new_coding='utf-8'):
-        """
-        Encode value from KE EMu.
-        There are actually a mixture of encodings used in KE EMu, so detect first
-        @param value: original value
-        @param new_coding: UTF-8
-        @return: encoded value
-        """
+    def encode_value(data, new_coding='UTF-8'):
 
-        # Use ISO-8859-2 as default
-        default_coding = 'ISO-8859-2'
+        # default_coding = 'ISO-8859-2'
+        #
+        # try:
+        #     coding = icu.CharsetDetector(data).detect().getName()
+        # except AttributeError:
+        #     # icu cannot detect encoding - use ISO-8859-2 as default
+        #     coding = default_coding
+        #
+        # try:
+        #     u_data = unicode(data, coding)
+        # except LookupError:
+        #     # Codec does not exist - for example IBM424_rtl
+        #     u_data = unicode(data, default_coding, errors='replace')
+        # except UnicodeDecodeError:
+        #     # Unknown char, so try again with errors replaced
+        #     u_data = unicode(data, coding, errors='replace')
+        # except Exception, e:
+        #
+        #     print e
+        #     print type(e)
+        #     print 'ERROR', data
+        #     print coding
+        #
+        #     x = unicode(data, default_coding, errors='replace')
+        #     print x
+        #
+        #     raise e
+        #
+        # finally:
+        #     # Convert the unicode value to UTF-8
+        #     data = u_data.encode(new_coding)
 
-        try:
-            # Can the string be parsed as UTF-8?
-            value.decode(new_coding)
-        except UnicodeDecodeError:
+        # else:
+        #
+        #     encoded = data.encode(new_coding)
+        #
+        #     if encoded != data:
+        #         print data, encoded
 
-            #  Cannot be parsed, so try detecting charset and converting
-            try:
-                coding = icu.CharsetDetector(value).detect().getName()
-            except AttributeError:
-                # Cannot detect encoding - use ISO-8859-2 as default
-                coding = default_coding
+        # data = unicode(data, 'latin-1', errors='replace')
 
-            # Use the detected encoding to decode / encode string
-            try:
-                value = value.decode(coding, errors='ignore')
-            except LookupError:
-                # Codec does not exist
-                value = value.decode(default_coding, errors='ignore')
-            finally:
-                value = value.encode(new_coding)
+        # char = chardet.detect(data)
+        #
+        # coding = icu.CharsetDetector(data).detect().getName()
+        #
+        # print coding, data
 
-        return value
+        # I don't know why, but all of the charset detectors I've tried, fail on this data
+        # Both chardet.detect(data) and icu.CharsetDetector(data).detect().getName() do not work
+        # This seems to be the best - if there's still errors, I might need to loop through
+        # A list of encodings, and see which one has the least ?s
 
+
+        data = unicode(data, 'latin-1', errors='replace')
+
+        # print data
+
+        # data = data.encode(new_coding, errors='replace')
+        #
+        # codecs.utf_8_decode(data, 'strict', True)
+        #
+        # print data
+
+
+        # if char['encoding'] == 'ISO-8859-2':
+        #     dat, errors='replace'a = data.encode(new_coding)
+        #
+        #
+        #     print data
+
+            # print type(data)
+            # print chardet.detect(data)
+
+        return data
+
+        # print icu.CharsetDetector(data).detect().getName()
+
+        # print repr(data)
+        #
+        # return data
+
+    # @staticmethod
+    # def encode_value(value, new_coding='utf-8'):
+    #     # """
+    #     # Encode value from KE EMu.
+    #     # There are actually a mixture of encodings used in KE EMu, so detect first
+    #     # @param value: original value
+    #     # @param new_coding: UTF-8
+    #     # @return: encoded value
+    #     # """
+    #     #
+    #     # # Use ISO-8859-2 as default
+    #     # default_coding = 'ISO-8859-2'
+    #     #
+    #     # # try:
+    #     # #     # Can the string be parsed as UTF-8?
+    #     # #     value.encode('utf-8')
+    #     # #
+    #     # # except UnicodeDecodeError:
+    #     # #
+    #     # #     #  Cannot be parsed, so try detecting charset and converting
+    #     # #     try:
+    #     # #         coding = icu.CharsetDetector(value).detect().getName()
+    #     # #     except AttributeError:
+    #     # #         # Cannot detect encoding - use ISO-8859-2 as default
+    #     # #         coding = default_coding
+    #     # #
+    #     # #     # Use the detected encoding to decode / encode string
+    #     # #     try:
+    #     # #         value = value.decode(coding, errors='ignore')
+    #     # #     except LookupError:
+    #     # #         # Codec does not exist
+    #     # #         value = value.decode(default_coding, errors='ignore')
+    #     # #     finally:
+    #     # #         value = value.encode(new_coding)
+    #     #
+    #     #
+    #     # try:
+    #     #     print value.encode('utf-8')
+    #     # except UnicodeDecodeError, e:
+    #     #
+    #     #     print '-------------------'
+    #     #     v = convert_encoding(value)
+    #     #     print v
+    #     #     print '-------------------'
+    #     #
+    #     #     # print value
+    #     #     # print '-------------------'
+    #     #     # print value.decode('latin-1', errors='ignore')
+    #     #     # print '-------------------'
+    #     #     # print default_coding
+    #     #
+    #     #     raise e
+    #     #
+    #     # return value
 
     def next(self):
 
@@ -205,7 +310,6 @@ class KEParser(object):
                             field = new_field
                         else:
                             field += '_tab'
-
                     try:
                         field_type = self.schema['columns'][field]['DataType']
                     except KeyError:
@@ -239,7 +343,6 @@ class KEParser(object):
 
                         item[field][i] = value
 
-
                 except ValueError, e:
                     # Does this line have an = sign? KE EMu export contains
                     # Empty lines, lines with just one letter etc
@@ -271,9 +374,26 @@ class KEParser(object):
                     item[i] = value[0]
                 elif self.flatten_mode == FLATTEN_ALL:
                     # Concatenate all values into a string separated by ";
-                    item[i] = '; '.join([str(v) for v in value])
+                    item[i] = '; '.join(map(self.flatten_map, value))
 
         return item
+
+    @staticmethod
+    def flatten_map(value):
+        """
+        Ensure all values are stings / '' for None, ready to be used in a join()
+        @param value:
+        @return: str value
+        """
+
+        # Convert None to ''
+        if value is None:
+            value = ''
+        # If not a string (ints and floats), convert it
+        elif not isinstance(value, basestring):
+            value = str(value)
+
+        return value
 
     def to_int(self, *args):
         return self.to_type(*args, func=int)
