@@ -162,7 +162,54 @@ class KEParser(object):
         # A list of encodings, and see which one has the least ?s
 
 
-        data = unicode(data, 'latin-1', errors='replace')
+        encoded_data = unicode(data, 'ISO-8859-1', errors='replace')
+
+        # try:
+        #     encoded_data = encoded_data.encode("utf-8").decode("utf-8")
+        # except UnicodeEncodeError:
+        #     print encoded_data
+
+        # encoded_data = encoded_data.encode(new_coding)
+
+        return encoded_data
+
+        # try:
+        #     # codecs.utf_8_decode(encoded_data, 'replace', True)
+        #
+        #     codecs.utf_8_decode(encoded_data.encode(new_coding))
+        # except UnicodeEncodeError:
+        #     print 'UnicodeEncodeError', data
+        #
+        #
+        #     e1 = unicode(data, 'ISO-8859-1', errors='replace')
+        #
+        #     codecs.utf_8_decode(e1, 'replace', True)
+        #
+        #     print e1
+
+
+
+            # print chard
+            # print icu_char
+            # print chardet.detect(data)
+            # print icu.CharsetDetector(data).detect().getName()
+
+        # codecs.utf_8_encode(data, 'strict')
+        #
+        # print data.encode(new_coding)
+
+        # data
+
+        # try:
+        #     codecs.utf_8_encode(data, 'strict', True)
+        #     print data
+        # except UnicodeEncodeError:
+        #     print data
+        #     raise
+            # pass
+
+
+        # raise Exception
 
         # print data
 
@@ -268,6 +315,9 @@ class KEParser(object):
                     item = self.flatten(item)
 
                 self.item_count += 1
+
+                # print item
+                # sys.exit()
 
                 return item
 
