@@ -66,6 +66,16 @@ class KEParser(object):
     item_count = 0
     regex_remove_numbers = re.compile('\d+$')
 
+    # KE EMu allows ranges of numbers in int fields
+    # For example ecatalogue.4984745 DarYearCollected=1843 - 1844
+    # But we do not want to throw this data away, so we'll override these field types
+    field_type_override = {
+        'DarDayCollected': 'Text',
+        'DarMonthCollected': 'Text',
+        'DarYearCollected': 'Text',
+        'DarObservedWeight': 'Text',  # Contains unit and weight - eg: 1920482: 12.3 gm
+    }
+
     def __init__(self, input_file, input_file_path, schema_file, flatten_mode=FLATTEN_SINGLE):
 
         self.file = input_file
@@ -107,11 +117,35 @@ class KEParser(object):
         return self
 
     @staticmethod
-    def encode_value(data, new_coding='UTF-8'):
+    def encode_value(value, item):
+        try:
+            # For most strings, we can just escape the unicode to get a utf-8 string
+            encoded_value = value.decode('latin-1').encode('raw_unicode_escape')
+            # Check this has been encoded properly
+            encoded_value.decode('utf-8')
+        except (UnicodeDecodeError, UnicodeEncodeError):
+            # But for some rare strings, this fails - see for example ecatalogue.export.4
+            # So try to encode as utf-8 and check again
+            encoded_value = value.decode('latin-1').encode('utf-8')
+            # Check this has been encoded properly
+            encoded_value.decode('utf-8')
 
-        data = unicode(data, 'ISO-8859-1', errors='replace')
-        return data
+        return encoded_value
 
+
+    def get_field_type(self, field):
+        try:
+            # Do we have an override field type?
+            field_type = self.field_type_override[field]
+        except KeyError:
+            try:
+                # Otherwise try and get the field type from the column definition
+                field_type = self.schema['columns'][field]['DataType']
+            except KeyError:
+                # Filed not in columns - raise field doesn't exist error
+                raise KEParserException('Field %s not found in schema' % (field, ))
+
+        return field_type
 
     def next(self):
 
@@ -139,7 +173,6 @@ class KEParser(object):
                 return item
 
             else:
-
                 try:
                     field, value = line.split('=', 1)
 
@@ -151,7 +184,7 @@ class KEParser(object):
                         item['irn'] = int(value)
                         continue
 
-                    value = self.encode_value(value)
+                    value = self.encode_value(value, item)
 
                     # Is this an array of values fieldName:0?
                     if ':' in field:
@@ -177,30 +210,27 @@ class KEParser(object):
                             field = new_field
                         else:
                             field += '_tab'
-                    try:
-                        field_type = self.schema['columns'][field]['DataType']
-                    except KeyError:
-                        # TODO: Do I need to do more to handle schema changes?
-                        raise KEParserException('Field %s not found in schema' % (field, ))
+
+                    field_type = self.get_field_type(field)
+
+                    # Convert empty strings to None
+                    # Cast integer and float fields
+                    # There are also Latitude & Longitude fields, but these are in the format 03 54 04.16 N and treated as strings
+                    if len(value) == 0:
+                        value = None
+                    elif field_type == 'Integer':
+                        value = self.to_int(value, item['irn'], line)
+                    elif field_type == 'Float':
+                        value = self.to_float(value, item['irn'], line)
                     else:
-                        # Convert empty strings to None
-                        # Cast integer and float fields
-                        # There are also Latitude & Longitude fields, but these are in the format 03 54 04.16 N and treated as strings
-                        if len(value) == 0:
+                        # Convert Yes / No to True / False so they can be stored as boolean
+                        if value in ['yes', 'Yes']:
+                            value = True
+                        elif value in ['no', 'No']:
+                            value = False
+                        # Convert 0 to none (this is for non- Integer and Float fields)
+                        elif value == '0':
                             value = None
-                        elif field_type == 'Integer':
-                            value = self.to_int(value, item['irn'], line)
-                        elif field_type == 'Float':
-                            value = self.to_float(value, item['irn'], line)
-                        else:
-                            # Convert Yes / No to True / False so they can be stored as boolean
-                            if value in ['yes', 'Yes']:
-                                value = True
-                            elif value in ['no', 'No']:
-                                value = False
-                            # Convert 0 to none (this is for non- Integer and Float fields)
-                            elif value == '0':
-                                value = None
 
                     if i is None:
                         item[field] = value
@@ -209,6 +239,9 @@ class KEParser(object):
                             item[field] = FieldList()
 
                         item[field][i] = value
+
+                    # if field == 'EntIdeTaxonLocal':
+                    #     print value.encode('raw_unicode_escape').decode('utf-8')
 
                 except ValueError, e:
                     # Does this line have an = sign? KE EMu export contains
@@ -401,6 +434,3 @@ class KEParser(object):
 
             percentage = float(self.line_count)/float(self.estimate_max_lines) * 100
             return "\t{0} records\t\t{1}/{2} \t\test. {3:.1f}%".format(self.item_count, self.line_count, self.estimate_max_lines, percentage)
-
-
-
