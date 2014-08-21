@@ -1,7 +1,6 @@
 import re
 import os
 import yaml
-import codecs
 import shelve
 import sys
 import logging
@@ -9,11 +8,6 @@ import gzip
 import contextlib
 import StringIO
 import subprocess
-import icu
-import chardet
-from bs4 import UnicodeDammit
-from bs4.dammit import EncodingDetector
-import unicodedata
 import codecs
 
 log = logging.getLogger(__name__)
@@ -74,6 +68,10 @@ class KEParser(object):
         'DarMonthCollected': 'Text',
         'DarYearCollected': 'Text',
         'DarObservedWeight': 'Text',  # Contains unit and weight - eg: 1920482: 12.3 gm
+        'DarTimeOfDay': 'Text',  # Schema is float - but content is 04:00
+        'DarStartTimeOfDay': 'Text',  # Schema is float - but content is 04:00
+        'DarEndTimeOfDay': 'Text',  # Schema is float - but content is 04:00
+        'MulMultiMediaRef': 'Text'  # Horrible hack: We need this to be text, so flattened multiple and singular are the same type
     }
 
     def __init__(self, input_file, input_file_path, schema_file, flatten_mode=FLATTEN_SINGLE):
