@@ -74,21 +74,33 @@ class KEParser(object):
         'MulMultiMediaRef': 'Text'  # Horrible hack: We need this to be text, so flattened multiple and singular are the same type
     }
 
-    def __init__(self, input_file, input_file_path, schema_file, flatten_mode=FLATTEN_SINGLE):
+    def __init__(self, file_obj, file_path, schema_file, parsed_schema_dir='/tmp', flatten_mode=FLATTEN_SINGLE):
+        """
+        Initiate file parser
+        @param file_obj: The file object - can be a normal python file object or a luigi file
+        @param file_path: Path to the input file
+        @param schema_file: Path to the perl schema file
+        @param flatten_mode: Whether to collapse multi value fields
+        @param parsed_schema_dir: Location to place the converted schema file
+        @return:
+        """
 
-        self.file = input_file
+        self.file = file_obj
         # Set mode to flatten arrays
         self.flatten_mode = flatten_mode
-        module_name = os.path.basename(input_file_path).split(os.extsep, 1)[0]
+
+        self.parsed_schema_dir = parsed_schema_dir
+
+        module_name = os.path.basename(file_path).split(os.extsep, 1)[0]
 
         # Sie of file in bytes
-        file_byte_size = os.path.getsize(input_file_path)
+        file_byte_size = os.path.getsize(file_path)
 
         #  If this is a zipped file, read a partial of the file
-        if '.gz' in input_file_path:
+        if '.gz' in file_path:
 
             # Read file to be able to estimate number of lines
-            tmp_file = open(input_file_path, 'rb')
+            tmp_file = open(file_path, 'rb')
             # Read the first sample_length number of bytes into the file buffer
             # This is uncompressed - allowing us to an estimate based on the uncompressed file size
             file_buffer = StringIO.StringIO(tmp_file.read(self.sample_length))
@@ -328,8 +340,7 @@ class KEParser(object):
         except OSError:
             pass
 
-    @staticmethod
-    def rebuild_schema(schema_file, shelf):
+    def rebuild_schema(self, schema_file, shelf):
 
         """
         Open the schema shelf.
@@ -338,9 +349,7 @@ class KEParser(object):
 
         print >> sys.stderr, 'Rebuilding schema'
 
-        schema_directory = os.path.dirname(schema_file)
-
-        yaml_schema_file = os.path.join(schema_directory, 'schema.yaml')
+        yaml_schema_file = os.path.join(self.parsed_schema_dir, 'schema.yaml')
 
         # If the yaml schema file doesn't exist, build using the PERL script
         if not os.path.isfile(yaml_schema_file):
@@ -348,7 +357,7 @@ class KEParser(object):
             #  Ensure directory is writable
             try:
 
-                f = os.path.join(schema_directory, 'dummy.txt')
+                f = os.path.join(self.parsed_schema_dir, 'dummy.txt')
                 open(f, 'w')
                 os.remove(f)
 
@@ -356,7 +365,8 @@ class KEParser(object):
                 raise IOError('Schema directory is not writable')
             else:
 
-                pipe = subprocess.Popen(["perl", os.path.join(os.path.dirname(os.path.dirname(__file__)), "bin/schema-yaml.pl"), schema_file], stdout=subprocess.PIPE)
+                print >> sys.stderr, 'Yamlifying schema file'
+                pipe = subprocess.Popen(["perl", os.path.join(os.path.dirname(os.path.dirname(__file__)), "bin/yamlify-schema.pl"), schema_file, self.parsed_schema_dir], stdout=subprocess.PIPE)
 
                 if not pipe.stdout.read():
                     raise KEParserException('Perl subprocess converting schema.pl to YAML failed')
