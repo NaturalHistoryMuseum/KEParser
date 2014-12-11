@@ -153,7 +153,10 @@ class KEParser(object):
                 field_type = self.schema['columns'][field]['DataType']
             except KeyError:
                 # Filed not in columns - raise field doesn't exist error
-                raise KEParserException('Field %s not found in schema' % (field, ))
+                # raise KEParserException('Field %s not found in schema' % (field, ))
+                # There are so many fields not included in the schema - skip raising an exception
+                # TODO: Investigate why there are so many missing fields
+                pass
 
         return field_type
 
