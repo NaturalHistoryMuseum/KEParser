@@ -142,7 +142,6 @@ class KEParser(object):
 
         return encoded_value
 
-
     def get_field_type(self, field):
         try:
             # Do we have an override field type?
@@ -153,10 +152,8 @@ class KEParser(object):
                 field_type = self.schema['columns'][field]['DataType']
             except KeyError:
                 # Filed not in columns - raise field doesn't exist error
-                # raise KEParserException('Field %s not found in schema' % (field, ))
-                # There are so many fields not included in the schema - skip raising an exception
-                # TODO: Investigate why there are so many missing fields
-                pass
+                raise KEParserException('Field %s not found in schema' % (field, ))
+
 
         return field_type
 
@@ -224,7 +221,12 @@ class KEParser(object):
                         else:
                             field += '_tab'
 
-                    field_type = self.get_field_type(field)
+                    try:
+                        field_type = self.get_field_type(field)
+                    except KEParserException:
+                        # There are so many fields not included in the schema - skip raising an exception
+                        # TODO: Investigate why there are so many missing fields
+                        continue
 
                     # Convert empty strings to None
                     # Cast integer and float fields
