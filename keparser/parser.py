@@ -9,6 +9,8 @@ import contextlib
 import StringIO
 import subprocess
 import codecs
+import time
+from datetime import datetime
 
 log = logging.getLogger(__name__)
 stream_handler = logging.StreamHandler(sys.stdout)
@@ -179,6 +181,8 @@ class KEParser(object):
                 if self.flatten_mode != FLATTEN_NONE:
                     item = self.flatten(item)
 
+                # Create an ISO Insert Date so we can filter out all the failed images
+                item['ISODateInserted'] = datetime.combine(datetime.strptime(item['AdmDateModified'], "%Y-%m-%d").date(), datetime.strptime(item['AdmTimeModified'], '%H:%M:%S.000').time())
                 self.item_count += 1
                 return item
 
