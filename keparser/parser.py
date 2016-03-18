@@ -380,7 +380,7 @@ class KEParser(object):
                 if not pipe.stdout.read():
                     raise KEParserException('Perl subprocess converting schema.pl to YAML failed')
 
-        with codecs.open(yaml_schema_file, "r", "ISO-8859-2") as f:
+        with open(yaml_schema_file, "r") as f:
             docs = yaml.load_all(f)
 
             for doc in docs:
